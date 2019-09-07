@@ -1,12 +1,11 @@
-Title: Python Project Layout For Flask and Everything
+Title: Python Project Layout For Flask And Everything
 Date: 2019-09-03 10:20
-Modified: 2019-09-03 10:20
+Modified: 2019-09-06 11:30
 Category: Python
 Tags: python, flask, docker
 Slug: python-project-layout
 Authors: Rishi Maker
-Summary: Python Project Laoyouts.
-
+Summary: Python Project Laoyouts.  
 
 I will walk through a minimal python flask application to highlight the project layout approach I took.
 
@@ -17,8 +16,11 @@ The driving factor is co-developing a self-contained library class along with th
 I will highlight the following areas using a sample project which can be found [here](https://github.com/cmlzaGk/sampleflask)
 
 - Project layout.
-- setup.py, \_\_init\_\_.py and requirements.txt
-- Intra-package and inter package references.
+- setup.py
+- requirements.txt
+- \_\_init\_\_.py
+- Local Deployment
+- Intra-package and inter-package references.
 - Class factories
 - Test cases and code coverage
 - DockerFiles
@@ -71,12 +73,9 @@ A package is a directory contains other packages or modules and is also called "
 
 The file \_\_init\_\_.py is a special file that is executed when a package is imported in the runtime.
 
-Here bettermpathlib, bettermathlib\_tests are packages inside distribution bettermath-lib. randomweb\_app and randomwebapp\_tests are packages inside distribution randomweb-app, and finally main is a package inside package randomweb\_app.
+Here bettermathlib, bettermathlib\_tests are packages inside the distribution bettermath-lib. randomweb\_app and randomwebapp\_tests are packages inside the distribution randomweb-app, and finally main is a package inside the package randomweb\_app.
 
-
-## setup.py, \_\_init\_\_.py and requirements.txt
-
-The three files play a significant role in app development.
+## setup.py
 
 setup.py is part of setuptools and defines properties of a distribution.
 
@@ -115,23 +114,36 @@ find\_packages is a neat helper to automatically include all packages inside ran
     package_data={'randomweb_app': ['templates/*', 'static/*']}
 ```
 
-By default non python files aka data files are excluded in a package. This is a good place to include them, and they can continue to be referenced by their relative paths anywhere.
+The third importand section is install\_requires. It is typically a list of minimum versions of other distributions that your package has a dependency on.
 
-Before, we go over install\_requires, lets talk about requirements.txt. requirements.txt is created typically by using the pip freeze command in your virtual env.
+The canonical way to obtain this list is via `pip freeze` command.
+
+The catch is that we will not use this list in our application environment.
+
+The consumers of your distribution should ideally be free to choose the latest and greatest stable versions, and ensure that their environment is tested.
+
+
+## requirements.txt
+
+requirements.txt is the list of dependencies that the application is tested with. In the production environment, you will want to install specific versions of those dependencies.
+
+requirements.txt is not part of the distribution. That role is fullfilled by setup.py's install\_requires.
+
+Hence requirements.txt lives at a folder level higher than the distributions.
 
 ```bash
 pip freeze > requirements.txt
 ```
 
-Hence requirements.txt represents the distributions that the application was tested under. It will have specific versions of external distributions.
+The typical production deployment should execute a variant of pip install with -r requirements.txt.
 
-The purpose of requirements.txt is to ensure that the production environments are run against specific versions.
+```bash
+pip install -r requirements.txt
+```
 
-However, it is not part of a distribution, because when we distribute, we would like consumers to obtain the latest and greatest versions of packages like Flask.
+## \_\_init\_\_.py
 
-In the distribution, the minimum version the package works with is defined, and that is where install\_requires in setup.py comes in.
-
-Finally a word on \_\_init\_\_.py.  \_\_init\_\_.py plays a crucial role in namespacing the package's contents appropriately.
+\_\_init\_\_.py plays a crucial role in namespacing the package's contents appropriately.
 
 The class BetterRandom is in module better\_random.py. So a consumer of my distribution would have to import bettermathlib.better\_random to access BetterRandom. This is not optimal.
 
@@ -141,10 +153,7 @@ By directly importing BetterRandom in \_\_init\_\_.py we bring BetterRandom to b
 from .better_random import BetterRandom
 ```
 
-
-## Intra-package and inter package references.
-
-References is now where we will see the advantage of keeping packages distributable come in.
+## Local Deployment
 
 Pip has an option \-e, called the editable option, using which pip will reference the local source paths in the deployment index.
 
@@ -153,9 +162,23 @@ pip install  --no-deps -e bettermath-lib/
 pip install  --no-deps -e randomweb-app/
 ```
 
-After this both the packages are self-contained and installed in the dev environment. We can continue to make code changes without re-installing the packages.
+After this, both the packages are self-contained and installed in the dev environment. We can continue to make code changes without re-installing the packages.
 
-For referencing modules within a package, we will use the intra-package references :
+We also want to exclude these distributions in the applications requirements.txt in case we need to regenerate requirements.txt.
+
+```bash
+pip freeze --exclude-editable > requirements.txt
+```
+
+For co-developed distributions we will call pip seperately for these distributions.
+
+## Intra-package and inter package references.
+
+References is now where we will see the advantage of keeping packages distributable come in.
+
+For referencing modules within a package, we will use the intra-package references using the . notation.
+
+We should be ok taking dependecies on where the relative paths of modules within a package are.
 
 ```python
 from ..random_creator import random_int
@@ -167,11 +190,6 @@ For inter-package references, we can now use absolute references without worryin
 from bettermathlib import BetterRandom
 ```
 
-Since we used pip to deploy the two distributions, we want to exclude these distributions in the applications requirements.txt. Instead, we will deploy all co-developed distributions seperately in production.
-
-```bash
-pip freeze --exclude-editable > requirements.txt
-```
 
 ## Class Factories
 
@@ -269,3 +287,5 @@ RUN python3 -m pip install  coverage
 RUN python3 -m pip install  --no-deps -e bettermath-lib/
 RUN python3 -m pip install  --no-deps -e randomweb-app/
 ```
+
+Thank you. The complete sample project is [here](https://github.com/cmlzaGk/sampleflask).
