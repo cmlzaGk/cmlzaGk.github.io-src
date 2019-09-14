@@ -7,9 +7,18 @@ Slug: python-project-layout
 Authors: Rishi Maker
 Summary: Python Project Laoyouts.  
 
-I will walk through a minimal python flask application to highlight the project layout approach I took.
+I will walk through a sample web application built using python, flask and docker.
+The application invokes a specialized math function in a library co-developed during application development.  
 
-The driving factor is co-developing a self-contained library class along with the main application
+The aim of this blog is to highlight some project structure best practices, that I learnt and used in my own application.  
+
+
+For those not familiar with flask, flask is a small web framework that implements the python WSGI interface.
+
+WSGI is an application level contract to develop web applications in python. The other side of the contract is implemented by WSGI webservers like UWSGI. 
+
+By no means, these practices are limited to a flask application, and could be applied everywhere.
+
 
 ## Summary
 
@@ -145,9 +154,9 @@ pip install -r requirements.txt
 
 \_\_init\_\_.py plays a crucial role in namespacing the package's contents appropriately.
 
-The class BetterRandom is in module better\_random.py. So a consumer of my distribution would have to import bettermathlib.better\_random to access BetterRandom. This is not optimal.
+The class BetterRandom is in module better\_random.py. So a consumer of my distribution would have to import bettermathlib.better\_random to access BetterRandom.
 
-By directly importing BetterRandom in \_\_init\_\_.py we bring BetterRandom to bettermathlib namespace, and then "import bettermathlib" is good enough to access BetterRandom.
+By directly importing BetterRandom in \_\_init\_\_.py we bring BetterRandom to bettermathlib namespace, and then "import bettermathlib" is a much better import style than "import bettermathlib.better\_random"
 
 ```python
 from .better_random import BetterRandom
