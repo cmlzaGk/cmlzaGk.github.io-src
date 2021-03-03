@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>How To Parse Like A Compiler - Part I</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="Rishi Maker">
+
+    <!-- Le styles -->
+    <link rel="stylesheet" href="/theme/css/bootstrap.min.css" type="text/css" />
+    <style type="text/css">
+      body {
+        padding-top: 60px;
+        padding-bottom: 40px;
+      }
+      .sidebar-nav {
+        padding: 9px 0;
+      }
+      .tag-1 {
+        font-size: 13pt;
+      }
+      .tag-2 {
+        font-size: 10pt;
+      }
+      .tag-2 {
+        font-size: 8pt;
+      }
+      .tag-4 {
+        font-size: 6pt;
+     }
+    </style>
+    <link href="/theme/css/bootstrap-responsive.min.css" rel="stylesheet">
+        <link href="/theme/css/font-awesome.css" rel="stylesheet">
+
+    <link href="/theme/css/pygments.css" rel="stylesheet">
+
+    <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="//html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <!-- Le fav and touch icons -->
+    <link rel="shortcut icon" href="/theme/images/favicon.ico">
+    <link rel="apple-touch-icon" href="/theme/images/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="/theme/images/apple-touch-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="/theme/images/apple-touch-icon-114x114.png">
+
+    <link href="/" type="application/atom+xml" rel="alternate" title="cmlzaGk ATOM Feed" />
+
+  </head>
+
+  <body>
+
+    <div class="navbar navbar-fixed-top">
+      <div class="navbar-inner">
+        <div class="container-fluid">
+          <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </a>
+          <a class="brand" href="/index.html">cmlzaGk </a>
+          <div class="nav-collapse">
+            <ul class="nav">
+                <li><a href="/pages/about.html">about</a></li>
+                          <li class="divider-vertical"></li>
+                  <li class="active">
+                    <a href="/category/python.html">
+						<i class="icon-folder-open icon-large"></i>Python
+					</a>
+                  </li>
+
+                          <ul class="nav pull-right">
+                                <li><a href="/archives.html"><i class="icon-th-list"></i>Archives</a></li>
+                          </ul>
+
+            </ul>
+            <!--<p class="navbar-text pull-right">Logged in as <a href="#">username</a></p>-->
+          </div><!--/.nav-collapse -->
+        </div>
+      </div>
+    </div>
+
+    <div class="container-fluid">
+      <div class="row">
+        <div class="span9" id="content">
+<section id="content">
+        <article>
+                <header>
+                        <h1>
+                                <a href=""
+                                        rel="bookmark"
+                                        title="Permalink to How To Parse Like A Compiler - Part I">
+                                        How To Parse Like A Compiler - Part I
+                                </a>
+                        </h1>
+                </header>
+                <div class="entry-content">
+                <div class="well">
+<footer class="post-info">
+<span class="label">Date</span>
+<abbr class="published" title="2020-03-21T05:47:00-07:00">
+        <i class="icon-calendar"></i>Sat 21 March 2020
+</abbr>
+<span class="label">By</span>
+<a href="/author/rishi-maker.html"><i class="icon-user"></i>Rishi Maker</a>
+<span class="label">Category</span>
+<a href="/category/python.html"><i class="icon-folder-open"></i>Python</a>.
+
+
+<span class="label">Tags</span>
+	<a href="/tag/python.html"><i class="icon-tag"></i>python</a>
+	<a href="/tag/lark.html"><i class="icon-tag"></i>lark</a>
+	<a href="/tag/grammar.html"><i class="icon-tag"></i>grammar</a>
+</footer><!-- /.post-info -->                </div>
+                <p>This week I helped a friend parse a file consisting of Poker hand histories.
+Instead of creating a hand parser, I wrote a small grammar and used a Python module called Lark to parse the file into a syntax tree. An integration like this used to be tedious in the past, but modern languages allow you to develop such a solution rather quickly.</p>
+<p>The aim of this blog is to highlight how to use context free grammars as an alternative to hand parsers. In part I, I will focus on parsing and the next part will be on transformation.</p>
+<p>This is a rather deep topic and I am by no means a language expert. I do not intend to cover theories of compilers, languages, parsers or syntax trees, but I will leave some practical references for those interested. I think that those with a basic understanding of context free grammars and Python can pick this solution, or you can read this again after doing a quick refresher on these topics.</p>
+<h2>Summary</h2>
+<ul>
+<li>Problem Statement</li>
+<li>Lark</li>
+<li>Context Free Grammar</li>
+<li>Earley vs LALR</li>
+<li>Building our grammar</li>
+<li>Moving to LALR</li>
+<li>Conclusion</li>
+</ul>
+<p>For reference the entire project can be found <a href="https://github.com/cmlzaGk/samplecodes/tree/main/parselikeacompiler1">here</a></p>
+<h2>Problem Statement</h2>
+<p>We will attempt to parse a poker hand history file.</p>
+<p>Each hand begins with a handnumber and is seperated by other hands by an empty newline.</p>
+<p>A hand consists of the complete state information of the game. The players, their positions, starting stacks, actions they took on each poker street, followed by the results.</p>
+<p>I hand-created a <a href="https://github.com/cmlzaGk/samplecodes/blob/main/parselikeacompiler1/sample.txt">sample file</a> for this blog consisting of two hands.</p>
+<p>The actual file that I parsed consisted a few hundred hands from one game.</p>
+<p>Online Poker players can download these files from the sites they play in. Each site could have its own format and there are many paid Software online for parsing these files into databases.</p>
+<h2>Lark</h2>
+<p>Lark is a python module that needs be installed using PIP.</p>
+<p>As always, I recommend creating a virtual python environment before installing any module to keep your global module space on your machine clean.</p>
+<div class="highlight"><pre><span></span>C:<span class="se">\~</span>&gt;mkdir samplelark
+
+C:<span class="se">\~</span>&gt;cd samplelark
+
+C:<span class="se">\~\s</span>amplelark&gt;python -m venv venv
+
+C:<span class="se">\~\s</span>amplelark&gt;.<span class="se">\v</span>env<span class="se">\S</span>cripts<span class="se">\a</span>ctivate
+
+<span class="o">(</span>venv<span class="o">)</span> C:<span class="se">\U</span>sers<span class="se">\r</span>ishim<span class="se">\s</span>amplelark&gt;pip install lark
+Collecting lark
+  Using cached https://files.pythonhosted.org/packages/69/8b/9418c0d24df0e8261c24e4b7218e80369f175c68eb3dfa119bc89d53f7fc/lark-0.11.1-py2.py3-none-any.whl
+Installing collected packages: lark
+Successfully installed lark-0.11.1
+You are using pip version <span class="m">19</span>.0.3, however version <span class="m">21</span>.0.1 is available.
+You should consider upgrading via the <span class="s1">&#39;python -m pip install --upgrade pip&#39;</span> command.
+
+<span class="o">(</span>venv<span class="o">)</span> C:<span class="se">\~\s</span>amplelark&gt;
+</pre></div>
+
+
+<p>To understand how to use Lark, lets attempt to parse a nested list of words.</p>
+<p>We will apply a simple grammar - a list consists of a list of single word or list, or it consists words and lists seperated by comma.</p>
+<p>In different words, a list consists of a single word or list, followed by zero or more sequences of comma and a single list or word.</p>
+<p>More formally</p>
+<div class="highlight"><pre><span></span>list -&gt; [listelem (&quot;,&quot; listelem)*]
+listelem: list|WORD
+</pre></div>
+
+
+<p>A complete Lark based parser looks like this:</p>
+<div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">lark</span> <span class="kn">import</span> <span class="n">Lark</span>
+<span class="n">cfg</span> <span class="o">=</span> <span class="sa">r</span><span class="s1">&#39;&#39;&#39;</span>
+<span class="s1">    list: &quot;[&quot; listelem (&quot;,&quot; listelem)* &quot;]&quot;</span>
+<span class="s1">    listelem: list|WORD</span>
+
+<span class="s1">    </span><span class="si">%i</span><span class="s1">mport common.WS</span>
+<span class="s1">    </span><span class="si">%i</span><span class="s1">gnore WS</span>
+<span class="s1">    </span><span class="si">%i</span><span class="s1">mport common.WORD</span>
+<span class="s1">&#39;&#39;&#39;</span>
+
+<span class="n">list_parser</span> <span class="o">=</span> <span class="n">Lark</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="s1">&#39;list&#39;</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">list_parser</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="s1">&#39;[test, me, [I, am, nested, [no, kidding]]]&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">pretty</span><span class="p">())</span>
+</pre></div>
+
+
+<p>The parse() function above returned a syntax-tree.</p>
+<p>The syntax tree is the parsed output, which we will explore in part II. In this part, we will just print a pretty output of the tree.</p>
+<p>The output indicates, we were able to succesfully parse the word and capture all the terminals and non terminals that we defined.</p>
+<div class="highlight"><pre><span></span><span class="o">(</span>venv<span class="o">)</span> C:<span class="se">\~\S</span>amplelark&gt;python nestedlist.py
+list
+  listelem      <span class="nb">test</span>
+  listelem      me
+  listelem
+    list
+      listelem  I
+      listelem  am
+      listelem  nested
+      listelem
+        list
+          listelem      no
+          listelem      kidding
+</pre></div>
+
+
+<p>This is the core principle of cfg parsing and allows us to cleanly implement a parser.</p>
+<h2>Context Free Grammar</h2>
+<p>A Context Free Grammar (CFG) consists of four things:</p>
+<ol>
+<li>
+<p>Terminals : The terminals make up the actual content of a sentence. "[", "," , WORD are all terminals in our example. Note that WORD is in implemented as a regex and we could have defined it ourselves instead of using LARK predefinitions.  We will use our own regex Terminals in the actual solution.</p>
+</li>
+<li>
+<p>NonTerminals : Phrase or a clause in grammar. eg. list, listelem</p>
+</li>
+<li>
+<p>Production Rules : A mapping between NonTerminals and a set of Terminals and NonTerminals. eg. listelem: list|WORD is a production rule.</p>
+</li>
+<li>
+<p>Start Elem: A special NonTerminal. This is essentially the rule we are trying to parse an input into.</p>
+</li>
+</ol>
+<p>The language is Context Free because its parsing does not depend on the actual value of a terminal.</p>
+<p>It is not possible to create an XML parser using a CFG if the parser attempts to match the correctness of start element tag and end element tag. We can create a rule in CFG where a start<X> and end element</Y> exist and are well nested, but we cannot guarentee X == Y.</p>
+<p>Such would be possible with a context sensitive grammar. In reality, CFG is still used for XML, but matching of X and Y is left to the next stage, the transformer (or the compiler).</p>
+<h2>Parsers</h2>
+<p>The first stage of parsing is lexical analyzer where the input is converted into tokens, however the actual parsing is performed by the parser.</p>
+<p>There are two main types of parsers supported by Lark - Earley and LALR.</p>
+<p>Earley can parse any grammar that we can write in CFG because it performs backtracking. Essentially, if a rule does not match, it can backtrack and use the next available rule.</p>
+<p>Such operation is clearly very expensive and is infact cubic in complexity. Unless performance is a major consideration, use Earley to begin with. It is infact default parser for Lark.</p>
+<p>If you are able to construct grammar in a manner where a parser can deterministicly make a decision on which rule to use next, you could use the LALR parser.</p>
+<p>LALR parses in linear time and fails fast.</p>
+<p>In a nutshell, LALR is a shift-reduce parser and that can parse a language does not have any conflicts between shifting and reducing.</p>
+<p>I will give an example of such a conflict later.</p>
+<p>By definition, Earley can parse more languages than LALR, but IMO most parsing problems in day to day life can be parsed using LALR.</p>
+<p>Lark will help you understand which particular construct of your grammar creates a conflict, and if you are able to modify your grammar, you should move to LALR.</p>
+<h2>Building a Grammar</h2>
+<p>For reference the sample input file can be found <a href="https://github.com/cmlzaGk/samplecodes/blob/main/parselikeacompiler1/sample.txt">here</a></p>
+<p>I started building the parser intitutively to begin with by reading the file.</p>
+<p>I parsed one hand first, section by section, expanding my grammar.</p>
+<p>The roadblock here were the statements begining with player names because the player names could be one or more words.</p>
+<div class="highlight"><pre><span></span>foobar checks
+Mr Foo bets 12
+</pre></div>
+
+
+<p>This meant the lexical scanner will not be able to identify the player. If I used a rule such as a "oneword|twowords" to identify the player, the lexer will not be able to disambiguate between 'foobar checks' or 'Mr. foo'.</p>
+<p>Eventually, I decided that since I was parsing games with static list of player names, I will just include player name as grammar terminals.</p>
+<p>This allows me to be context free.</p>
+<p>I can also create a pre-parser that will generate the player names as terminals before I start the main parser, so I was not very concerned about broader application of this approach.</p>
+<p>As I started parsing more and more hands in the file, I encountered new conditions which I incorporated into my grammar and my final main rule took a form that was able to parse the entire file.</p>
+<div class="highlight"><pre><span></span>    handhistory: handdesc when table seats posts preflop [flop] [turn] [river] [boards] summary winner [shows]
+</pre></div>
+
+
+<p>For reference the earley parser implementation can be found <a href="https://github.com/cmlzaGk/samplecodes/blob/main/parselikeacompiler1/hhparser.py">here</a></p>
+<h2>Moving to LALR</h2>
+<p>The above implementation was Earley and was visibly slow. I decided to move my parser to LALR.</p>
+<p>It is pretty straight-forward in Lark to move to LALR. I just needed to pass the parameter parser='lalr' to Lark constructor.</p>
+<p>However, my parser broke immediately, and I noticed that asking the lexer to ignore whitespace meant that new statements were not easily recognized.</p>
+<p>I conclude that Earley was doing a lot of backtracking between rules because of ignoring whitespace. I made the parser strict about whitespace and I was able to parse most of the structures.</p>
+<p>I ran into a conflict resolution with my Non Terminal called 'shows'.</p>
+<div class="highlight"><pre><span></span>    handhistory: handdesc when table seats posts preflop [flop] [turn] [river] [boards] summary winner [shows]
+    shows: showdown*
+</pre></div>
+
+
+<p>This directive happens when a player shows a hand. Square brackets in terminals indicate that the NonTerminal appears zero or one times.</p>
+<p>The asterix symbol in the NonTerminal is a regular regex symbol indicating zero or more times.</p>
+<p>Hence when there were no occurrences of shows, the parser didn't know which production rule to use, because both the rules matched.</p>
+<p>An LALR parser needs to know with certainty whether to shift the square bracket rule or to reduce with the second production.</p>
+<p>I resolved this by restructuring shows to have one or more occurences.</p>
+<p>Hence 'shows' is only reduced when there is actually a showdown directive. If there is no showdown, a shift is performed.</p>
+<p>The complete LALR parser implementation can be found <a href="https://github.com/cmlzaGk/samplecodes/blob/main/parselikeacompiler1/hhparser_lalr.py">here</a></p>
+<h2>Conclusion</h2>
+<p>At the end the complete parser was very quick to create and I was able to develop it organically and intituively.</p>
+<p>I will admit that it is difficult to understand error conditions during building, and it requires a fair bit of step by step parsing.</p>
+<p>The overall process is very quick because at the end of the day, the code is concise and quite frankly easier to understand</p>
+<p>I have used this in parsing poker ranges and poker hand histories.</p>
+<p>In the next part, I will explain the transformation technique. Afterall, the canonical use of parsing is in converting data from one form to another.</p>
+                </div><!-- /.entry-content -->
+        </article>
+</section>
+        </div><!--/span-->
+
+                <div class="span3 well sidebar-nav" id="sidebar">
+<ul class="nav nav-list">
+<li class="nav-header"><h4><i class="icon-external-link"></i>blogroll</h4></li>
+    <li><a href="http://python.org/"><i class="icon-external-link"></i>Python.org</a></li>
+    <li><a href="http://flowviewer.azurewebsites.net/"><i class="icon-external-link"></i>FlowViewer</a></li>
+<li class="nav-header"><h4><i class="icon-home icon-large"></i> social</h4></li>
+    <li><a href="http://twitter.com/rishimaker"><i class="icon-twitter-sign icon-large"></i>twitter</a></li>
+    <li><a href="http://github.com/cmlzaGk"><i class="icon-github-sign icon-large"></i>github</a></li>
+    <li><a href="https://www.linkedin.com/in/rishi-maker-74a5a713/"><i class="icon-linkedin-sign icon-large"></i>linkedin</a></li>
+
+<li class="nav-header"><h4><i class="icon-folder-close icon-large"></i>Categories</h4></li>
+<li>
+<a href="/category/python.html">
+    <i class="icon-folder-open icon-large"></i>Python
+</a>
+</li>
+
+<li class="nav-header"><h4><i class="icon-tags icon-large"></i>Tags</h4></li>
+
+
+</ul>        </div><!--/.well -->
+
+      </div><!--/row-->
+
+      <hr>
+
+      <footer>
+        <address id="about">
+                Proudly powered by <a href="http://pelican.notmyidea.org/">Pelican <i class="icon-external-link"></i></a>,
+                                which takes great advantage of <a href="http://python.org">Python <i class="icon-external-link"></i></a>.
+        </address><!-- /#about -->
+
+        <p>The theme is from <a href="http://twitter.github.com/bootstrap/">Bootstrap from Twitter <i class="icon-external-link"></i></a>,
+                   and <a href="http://fortawesome.github.com/Font-Awesome/">Font-Awesome <i class="icon-external-link"></i></a>, thanks!</p>
+      </footer>
+
+    </div><!--/.fluid-container-->
+
+
+
+    <!-- Le javascript -->
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script src="/theme/js/jquery-1.7.2.min.js"></script>
+    <script src="/theme/js/bootstrap.min.js"></script>
+  </body>
+</html>

@@ -1,0 +1,395 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom"><title>cmlzaGk</title><link href="/" rel="alternate"></link><link href="/feeds/all.atom.xml" rel="self"></link><id>/</id><updated>2020-03-21T05:47:00-07:00</updated><entry><title>How To Parse Like A Compiler - Part I</title><link href="/python-parse-compiler-part1.html" rel="alternate"></link><published>2020-03-21T05:47:00-07:00</published><updated>2020-03-21T05:47:00-07:00</updated><author><name>Rishi Maker</name></author><id>tag:None,2020-03-21:/python-parse-compiler-part1.html</id><summary type="html">&lt;p&gt;Python Lark Part 1&lt;/p&gt;</summary><content type="html">&lt;p&gt;This week I helped a friend parse a file consisting of Poker hand histories.
+Instead of creating a hand parser, I wrote a small grammar and used a Python module called Lark to parse the file into a syntax tree. An integration like this used to be tedious in the past, but modern languages allow you to develop such a solution rather quickly.&lt;/p&gt;
+&lt;p&gt;The aim of this blog is to highlight how to use context free grammars as an alternative to hand parsers. In part I, I will focus on parsing and the next part will be on transformation.&lt;/p&gt;
+&lt;p&gt;This is a rather deep topic and I am by no means a language expert. I do not intend to cover theories of compilers, languages, parsers or syntax trees, but I will leave some practical references for those interested. I think that those with a basic understanding of context free grammars and Python can pick this solution, or you can read this again after doing a quick refresher on these topics.&lt;/p&gt;
+&lt;h2&gt;Summary&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;Problem Statement&lt;/li&gt;
+&lt;li&gt;Lark&lt;/li&gt;
+&lt;li&gt;Context Free Grammar&lt;/li&gt;
+&lt;li&gt;Earley vs LALR&lt;/li&gt;
+&lt;li&gt;Building our grammar&lt;/li&gt;
+&lt;li&gt;Moving to LALR&lt;/li&gt;
+&lt;li&gt;Conclusion&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;For reference the entire project can be found &lt;a href="https://github.com/cmlzaGk/samplecodes/tree/main/parselikeacompiler1"&gt;here&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;Problem Statement&lt;/h2&gt;
+&lt;p&gt;We will attempt to parse a poker hand history file.&lt;/p&gt;
+&lt;p&gt;Each hand begins with a handnumber and is seperated by other hands by an empty newline.&lt;/p&gt;
+&lt;p&gt;A hand consists of the complete state information of the game. The players, their positions, starting stacks, actions they took on each poker street, followed by the results.&lt;/p&gt;
+&lt;p&gt;I hand-created a &lt;a href="https://github.com/cmlzaGk/samplecodes/blob/main/parselikeacompiler1/sample.txt"&gt;sample file&lt;/a&gt; for this blog consisting of two hands.&lt;/p&gt;
+&lt;p&gt;The actual file that I parsed consisted a few hundred hands from one game.&lt;/p&gt;
+&lt;p&gt;Online Poker players can download these files from the sites they play in. Each site could have its own format and there are many paid Software online for parsing these files into databases.&lt;/p&gt;
+&lt;h2&gt;Lark&lt;/h2&gt;
+&lt;p&gt;Lark is a python module that needs be installed using PIP.&lt;/p&gt;
+&lt;p&gt;As always, I recommend creating a virtual python environment before installing any module to keep your global module space on your machine clean.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;C:&lt;span class="se"&gt;\~&lt;/span&gt;&amp;gt;mkdir samplelark
+
+C:&lt;span class="se"&gt;\~&lt;/span&gt;&amp;gt;cd samplelark
+
+C:&lt;span class="se"&gt;\~\s&lt;/span&gt;amplelark&amp;gt;python -m venv venv
+
+C:&lt;span class="se"&gt;\~\s&lt;/span&gt;amplelark&amp;gt;.&lt;span class="se"&gt;\v&lt;/span&gt;env&lt;span class="se"&gt;\S&lt;/span&gt;cripts&lt;span class="se"&gt;\a&lt;/span&gt;ctivate
+
+&lt;span class="o"&gt;(&lt;/span&gt;venv&lt;span class="o"&gt;)&lt;/span&gt; C:&lt;span class="se"&gt;\U&lt;/span&gt;sers&lt;span class="se"&gt;\r&lt;/span&gt;ishim&lt;span class="se"&gt;\s&lt;/span&gt;amplelark&amp;gt;pip install lark
+Collecting lark
+  Using cached https://files.pythonhosted.org/packages/69/8b/9418c0d24df0e8261c24e4b7218e80369f175c68eb3dfa119bc89d53f7fc/lark-0.11.1-py2.py3-none-any.whl
+Installing collected packages: lark
+Successfully installed lark-0.11.1
+You are using pip version &lt;span class="m"&gt;19&lt;/span&gt;.0.3, however version &lt;span class="m"&gt;21&lt;/span&gt;.0.1 is available.
+You should consider upgrading via the &lt;span class="s1"&gt;&amp;#39;python -m pip install --upgrade pip&amp;#39;&lt;/span&gt; command.
+
+&lt;span class="o"&gt;(&lt;/span&gt;venv&lt;span class="o"&gt;)&lt;/span&gt; C:&lt;span class="se"&gt;\~\s&lt;/span&gt;amplelark&amp;gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;To understand how to use Lark, lets attempt to parse a nested list of words.&lt;/p&gt;
+&lt;p&gt;We will apply a simple grammar - a list consists of a list of single word or list, or it consists words and lists seperated by comma.&lt;/p&gt;
+&lt;p&gt;In different words, a list consists of a single word or list, followed by zero or more sequences of comma and a single list or word.&lt;/p&gt;
+&lt;p&gt;More formally&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;list -&amp;gt; [listelem (&amp;quot;,&amp;quot; listelem)*]
+listelem: list|WORD
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;A complete Lark based parser looks like this:&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;lark&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;Lark&lt;/span&gt;
+&lt;span class="n"&gt;cfg&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="sa"&gt;r&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;&amp;#39;&amp;#39;&lt;/span&gt;
+&lt;span class="s1"&gt;    list: &amp;quot;[&amp;quot; listelem (&amp;quot;,&amp;quot; listelem)* &amp;quot;]&amp;quot;&lt;/span&gt;
+&lt;span class="s1"&gt;    listelem: list|WORD&lt;/span&gt;
+
+&lt;span class="s1"&gt;    &lt;/span&gt;&lt;span class="si"&gt;%i&lt;/span&gt;&lt;span class="s1"&gt;mport common.WS&lt;/span&gt;
+&lt;span class="s1"&gt;    &lt;/span&gt;&lt;span class="si"&gt;%i&lt;/span&gt;&lt;span class="s1"&gt;gnore WS&lt;/span&gt;
+&lt;span class="s1"&gt;    &lt;/span&gt;&lt;span class="si"&gt;%i&lt;/span&gt;&lt;span class="s1"&gt;mport common.WORD&lt;/span&gt;
+&lt;span class="s1"&gt;&amp;#39;&amp;#39;&amp;#39;&lt;/span&gt;
+
+&lt;span class="n"&gt;list_parser&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;Lark&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;cfg&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;start&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;list&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="k"&gt;print&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;list_parser&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;parse&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;[test, me, [I, am, nested, [no, kidding]]]&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;pretty&lt;/span&gt;&lt;span class="p"&gt;())&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;The parse() function above returned a syntax-tree.&lt;/p&gt;
+&lt;p&gt;The syntax tree is the parsed output, which we will explore in part II. In this part, we will just print a pretty output of the tree.&lt;/p&gt;
+&lt;p&gt;The output indicates, we were able to succesfully parse the word and capture all the terminals and non terminals that we defined.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="o"&gt;(&lt;/span&gt;venv&lt;span class="o"&gt;)&lt;/span&gt; C:&lt;span class="se"&gt;\~\S&lt;/span&gt;amplelark&amp;gt;python nestedlist.py
+list
+  listelem      &lt;span class="nb"&gt;test&lt;/span&gt;
+  listelem      me
+  listelem
+    list
+      listelem  I
+      listelem  am
+      listelem  nested
+      listelem
+        list
+          listelem      no
+          listelem      kidding
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;This is the core principle of cfg parsing and allows us to cleanly implement a parser.&lt;/p&gt;
+&lt;h2&gt;Context Free Grammar&lt;/h2&gt;
+&lt;p&gt;A Context Free Grammar (CFG) consists of four things:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Terminals : The terminals make up the actual content of a sentence. "[", "," , WORD are all terminals in our example. Note that WORD is in implemented as a regex and we could have defined it ourselves instead of using LARK predefinitions.  We will use our own regex Terminals in the actual solution.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;NonTerminals : Phrase or a clause in grammar. eg. list, listelem&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Production Rules : A mapping between NonTerminals and a set of Terminals and NonTerminals. eg. listelem: list|WORD is a production rule.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Start Elem: A special NonTerminal. This is essentially the rule we are trying to parse an input into.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;The language is Context Free because its parsing does not depend on the actual value of a terminal.&lt;/p&gt;
+&lt;p&gt;It is not possible to create an XML parser using a CFG if the parser attempts to match the correctness of start element tag and end element tag. We can create a rule in CFG where a start&lt;X&gt; and end element&lt;/Y&gt; exist and are well nested, but we cannot guarentee X == Y.&lt;/p&gt;
+&lt;p&gt;Such would be possible with a context sensitive grammar. In reality, CFG is still used for XML, but matching of X and Y is left to the next stage, the transformer (or the compiler).&lt;/p&gt;
+&lt;h2&gt;Parsers&lt;/h2&gt;
+&lt;p&gt;The first stage of parsing is lexical analyzer where the input is converted into tokens, however the actual parsing is performed by the parser.&lt;/p&gt;
+&lt;p&gt;There are two main types of parsers supported by Lark - Earley and LALR.&lt;/p&gt;
+&lt;p&gt;Earley can parse any grammar that we can write in CFG because it performs backtracking. Essentially, if a rule does not match, it can backtrack and use the next available rule.&lt;/p&gt;
+&lt;p&gt;Such operation is clearly very expensive and is infact cubic in complexity. Unless performance is a major consideration, use Earley to begin with. It is infact default parser for Lark.&lt;/p&gt;
+&lt;p&gt;If you are able to construct grammar in a manner where a parser can deterministicly make a decision on which rule to use next, you could use the LALR parser.&lt;/p&gt;
+&lt;p&gt;LALR parses in linear time and fails fast.&lt;/p&gt;
+&lt;p&gt;In a nutshell, LALR is a shift-reduce parser and that can parse a language does not have any conflicts between shifting and reducing.&lt;/p&gt;
+&lt;p&gt;I will give an example of such a conflict later.&lt;/p&gt;
+&lt;p&gt;By definition, Earley can parse more languages than LALR, but IMO most parsing problems in day to day life can be parsed using LALR.&lt;/p&gt;
+&lt;p&gt;Lark will help you understand which particular construct of your grammar creates a conflict, and if you are able to modify your grammar, you should move to LALR.&lt;/p&gt;
+&lt;h2&gt;Building a Grammar&lt;/h2&gt;
+&lt;p&gt;For reference the sample input file can be found &lt;a href="https://github.com/cmlzaGk/samplecodes/blob/main/parselikeacompiler1/sample.txt"&gt;here&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;I started building the parser intitutively to begin with by reading the file.&lt;/p&gt;
+&lt;p&gt;I parsed one hand first, section by section, expanding my grammar.&lt;/p&gt;
+&lt;p&gt;The roadblock here were the statements begining with player names because the player names could be one or more words.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;foobar checks
+Mr Foo bets 12
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;This meant the lexical scanner will not be able to identify the player. If I used a rule such as a "oneword|twowords" to identify the player, the lexer will not be able to disambiguate between 'foobar checks' or 'Mr. foo'.&lt;/p&gt;
+&lt;p&gt;Eventually, I decided that since I was parsing games with static list of player names, I will just include player name as grammar terminals.&lt;/p&gt;
+&lt;p&gt;This allows me to be context free.&lt;/p&gt;
+&lt;p&gt;I can also create a pre-parser that will generate the player names as terminals before I start the main parser, so I was not very concerned about broader application of this approach.&lt;/p&gt;
+&lt;p&gt;As I started parsing more and more hands in the file, I encountered new conditions which I incorporated into my grammar and my final main rule took a form that was able to parse the entire file.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;    handhistory: handdesc when table seats posts preflop [flop] [turn] [river] [boards] summary winner [shows]
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;For reference the earley parser implementation can be found &lt;a href="https://github.com/cmlzaGk/samplecodes/blob/main/parselikeacompiler1/hhparser.py"&gt;here&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;Moving to LALR&lt;/h2&gt;
+&lt;p&gt;The above implementation was Earley and was visibly slow. I decided to move my parser to LALR.&lt;/p&gt;
+&lt;p&gt;It is pretty straight-forward in Lark to move to LALR. I just needed to pass the parameter parser='lalr' to Lark constructor.&lt;/p&gt;
+&lt;p&gt;However, my parser broke immediately, and I noticed that asking the lexer to ignore whitespace meant that new statements were not easily recognized.&lt;/p&gt;
+&lt;p&gt;I conclude that Earley was doing a lot of backtracking between rules because of ignoring whitespace. I made the parser strict about whitespace and I was able to parse most of the structures.&lt;/p&gt;
+&lt;p&gt;I ran into a conflict resolution with my Non Terminal called 'shows'.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;    handhistory: handdesc when table seats posts preflop [flop] [turn] [river] [boards] summary winner [shows]
+    shows: showdown*
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;This directive happens when a player shows a hand. Square brackets in terminals indicate that the NonTerminal appears zero or one times.&lt;/p&gt;
+&lt;p&gt;The asterix symbol in the NonTerminal is a regular regex symbol indicating zero or more times.&lt;/p&gt;
+&lt;p&gt;Hence when there were no occurrences of shows, the parser didn't know which production rule to use, because both the rules matched.&lt;/p&gt;
+&lt;p&gt;An LALR parser needs to know with certainty whether to shift the square bracket rule or to reduce with the second production.&lt;/p&gt;
+&lt;p&gt;I resolved this by restructuring shows to have one or more occurences.&lt;/p&gt;
+&lt;p&gt;Hence 'shows' is only reduced when there is actually a showdown directive. If there is no showdown, a shift is performed.&lt;/p&gt;
+&lt;p&gt;The complete LALR parser implementation can be found &lt;a href="https://github.com/cmlzaGk/samplecodes/blob/main/parselikeacompiler1/hhparser_lalr.py"&gt;here&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;At the end the complete parser was very quick to create and I was able to develop it organically and intituively.&lt;/p&gt;
+&lt;p&gt;I will admit that it is difficult to understand error conditions during building, and it requires a fair bit of step by step parsing.&lt;/p&gt;
+&lt;p&gt;The overall process is very quick because at the end of the day, the code is concise and quite frankly easier to understand&lt;/p&gt;
+&lt;p&gt;I have used this in parsing poker ranges and poker hand histories.&lt;/p&gt;
+&lt;p&gt;In the next part, I will explain the transformation technique. Afterall, the canonical use of parsing is in converting data from one form to another.&lt;/p&gt;</content><category term="python"></category><category term="lark"></category><category term="grammar"></category></entry><entry><title>Python Project Layout For Flask And Everything</title><link href="/python-project-layout.html" rel="alternate"></link><published>2019-09-03T10:20:00-07:00</published><updated>2019-09-06T11:30:00-07:00</updated><author><name>Rishi Maker</name></author><id>tag:None,2019-09-03:/python-project-layout.html</id><summary type="html">&lt;p&gt;Python Project Laoyouts.&lt;/p&gt;</summary><content type="html">&lt;p&gt;I will walk through a sample web application built using python, flask and docker.
+The application invokes a specialized math function in a library co-developed during application development.  &lt;/p&gt;
+&lt;p&gt;The aim of this blog is to highlight some project structure best practices, that I learnt and used in my own application.  &lt;/p&gt;
+&lt;p&gt;For those not familiar with flask, flask is a small web framework that implements the python WSGI interface.&lt;/p&gt;
+&lt;p&gt;WSGI is an application level contract to develop web applications in python. The other side of the contract is implemented by WSGI webservers like UWSGI. &lt;/p&gt;
+&lt;p&gt;By no means, these practices are limited to a flask application, and could be applied everywhere.&lt;/p&gt;
+&lt;h2&gt;Summary&lt;/h2&gt;
+&lt;p&gt;I will highlight the following areas using a sample project which can be found &lt;a href="https://github.com/cmlzaGk/sampleflask"&gt;here&lt;/a&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Project layout.&lt;/li&gt;
+&lt;li&gt;setup.py&lt;/li&gt;
+&lt;li&gt;requirements.txt&lt;/li&gt;
+&lt;li&gt;__init__.py&lt;/li&gt;
+&lt;li&gt;Local Deployment&lt;/li&gt;
+&lt;li&gt;Intra-package and inter-package references.&lt;/li&gt;
+&lt;li&gt;Class factories&lt;/li&gt;
+&lt;li&gt;Test cases and code coverage&lt;/li&gt;
+&lt;li&gt;DockerFiles&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Project Layout&lt;/h2&gt;
+&lt;p&gt;The project layout looks like this.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;.
+├── docker-compose.yml
+├── Dockerfile
+├── Dockerfile.unittests
+├── requirements.txt
+├── run_coverage.sh
+├── uwsgi.ini
+└──-bettermath-lib
+    ├── setup.py
+    └── bettermathlib
+        ├── better_random.py
+        ├── __init__.py
+    └── bettermathlib_tests
+        ├── tests_bettermathlib.py
+        ├── __init__.py
+└── randomweb-app
+    ├── setup.py
+    └── randomwebapp_tests
+        ├── tests_basic.py
+        ├── tests_client.py
+        ├── __init__.py
+    └── randomweb_app
+        ├── config.py
+        ├── create_app.py
+        ├── flask_app.py
+        ├── random_creator.py
+        ├── __init__.py
+        └── main
+            ├── views.py
+            ├── __init__.py
+            └── static
+                ├── about.txt
+            └── templates
+                ├── base.html
+                └── betterrandom.html
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;A distribution is a folder that can be installed and moved around anywhere.  bettermath-lib and randomweb-app are the self-contained distributions.&lt;/p&gt;
+&lt;p&gt;A package is a directory contains other packages or modules and is also called "Import Package" because its importable.&lt;/p&gt;
+&lt;p&gt;The file __init__.py is a special file that is executed when a package is imported in the runtime.&lt;/p&gt;
+&lt;p&gt;Here bettermathlib, bettermathlib_tests are packages inside the distribution bettermath-lib. randomweb_app and randomwebapp_tests are packages inside the distribution randomweb-app, and finally main is a package inside the package randomweb_app.&lt;/p&gt;
+&lt;h2&gt;setup.py&lt;/h2&gt;
+&lt;p&gt;setup.py is part of setuptools and defines properties of a distribution.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;setuptools&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;setup&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;find_packages&lt;/span&gt;
+
+&lt;span class="n"&gt;setup&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;
+    &lt;span class="n"&gt;name&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;randomweb-app&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;version&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;1.0&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;description&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;Random Webapp&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;author&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;Fishy Baker&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;author_email&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;fishybaker@hotmail.com&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;packages&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="n"&gt;find_packages&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt;
+    &lt;span class="n"&gt;install_requires&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;
+        &lt;span class="s1"&gt;&amp;#39;Flask &amp;gt;= 1.1.1&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+        &lt;span class="s1"&gt;&amp;#39;Flask-Bootstrap &amp;gt;= 3.3.7.1&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+        &lt;span class="s1"&gt;&amp;#39;Flask-WTF &amp;gt;= 0.14.2&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+        &lt;span class="s1"&gt;&amp;#39;jsonschema &amp;gt;= 3.0.1&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+        &lt;span class="s1"&gt;&amp;#39;bettermath-lib &amp;gt;= 1.0&amp;#39;&lt;/span&gt;
+    &lt;span class="p"&gt;],&lt;/span&gt;
+    &lt;span class="n"&gt;include_package_data&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="bp"&gt;True&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;package_data&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;randomweb_app&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;templates/*&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;static/*&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;]}&lt;/span&gt;
+&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;There are three main parts of setup.py&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;    &lt;span class="n"&gt;packages&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="n"&gt;find_packages&lt;/span&gt;&lt;span class="p"&gt;(),&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;find_packages is a neat helper to automatically include all packages inside randomweb-app as part of the distributable. The other option would be to create a static python list with a list of packages.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;    &lt;span class="n"&gt;include_package_data&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="bp"&gt;True&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="n"&gt;package_data&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="p"&gt;{&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;randomweb_app&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;templates/*&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;static/*&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;]}&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;The third importand section is install_requires. It is typically a list of minimum versions of other distributions that your package has a dependency on.&lt;/p&gt;
+&lt;p&gt;The canonical way to obtain this list is via &lt;code&gt;pip freeze&lt;/code&gt; command.&lt;/p&gt;
+&lt;p&gt;The catch is that we will not use this list in our application environment.&lt;/p&gt;
+&lt;p&gt;The consumers of your distribution should ideally be free to choose the latest and greatest stable versions, and ensure that their environment is tested.&lt;/p&gt;
+&lt;h2&gt;requirements.txt&lt;/h2&gt;
+&lt;p&gt;requirements.txt is the list of dependencies that the application is tested with. In the production environment, you will want to install specific versions of those dependencies.&lt;/p&gt;
+&lt;p&gt;requirements.txt is not part of the distribution. That role is fullfilled by setup.py's install_requires.&lt;/p&gt;
+&lt;p&gt;Hence requirements.txt lives at a folder level higher than the distributions.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;pip freeze &amp;gt; requirements.txt
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;The typical production deployment should execute a variant of pip install with -r requirements.txt.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;pip install -r requirements.txt
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;h2&gt;__init__.py&lt;/h2&gt;
+&lt;p&gt;__init__.py plays a crucial role in namespacing the package's contents appropriately.&lt;/p&gt;
+&lt;p&gt;The class BetterRandom is in module better_random.py. So a consumer of my distribution would have to import bettermathlib.better_random to access BetterRandom.&lt;/p&gt;
+&lt;p&gt;By directly importing BetterRandom in __init__.py we bring BetterRandom to bettermathlib namespace, and then "import bettermathlib" is a much better import style than "import bettermathlib.better_random"&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;.better_random&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;BetterRandom&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;h2&gt;Local Deployment&lt;/h2&gt;
+&lt;p&gt;Pip has an option -e, called the editable option, using which pip will reference the local source paths in the deployment index.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;pip install  --no-deps -e bettermath-lib/
+pip install  --no-deps -e randomweb-app/
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;After this, both the packages are self-contained and installed in the dev environment. We can continue to make code changes without re-installing the packages.&lt;/p&gt;
+&lt;p&gt;We also want to exclude these distributions in the applications requirements.txt in case we need to regenerate requirements.txt.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;pip freeze --exclude-editable &amp;gt; requirements.txt
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;For co-developed distributions we will call pip seperately for these distributions.&lt;/p&gt;
+&lt;h2&gt;Intra-package and inter package references.&lt;/h2&gt;
+&lt;p&gt;References is now where we will see the advantage of keeping packages distributable come in.&lt;/p&gt;
+&lt;p&gt;For referencing modules within a package, we will use the intra-package references using the . notation.&lt;/p&gt;
+&lt;p&gt;We should be ok taking dependecies on where the relative paths of modules within a package are.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;..random_creator&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;random_int&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;For inter-package references, we can now use absolute references without worrying about where the actual code for the package resides.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;bettermathlib&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;BetterRandom&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;h2&gt;Class Factories&lt;/h2&gt;
+&lt;p&gt;This section is flask-app sepcific, but the principle applies everywhere.&lt;/p&gt;
+&lt;p&gt;This application is a flask micro-service, and does not need a "main" anywhere. Services like uwsgi and flask commandline expect to find a callable object in a module.&lt;/p&gt;
+&lt;p&gt;I created a module called flask_app.py inside randomwebapp which creates a global app object using a class factory which lives inside another module create_app.py.&lt;/p&gt;
+&lt;p&gt;Hence the module we want to define in uwsgi.ini becomes randomwebapp.flask_app.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="na"&gt;module&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s"&gt;randomweb_app.flask_app&lt;/span&gt;
+&lt;span class="na"&gt;callable&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="s"&gt;app&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;The class factory function create_app.create_app does flask initializaiton based on the passed configuration. This is now the only user object we want to expose in my package's namespace, as it will be useful in testing.&lt;/p&gt;
+&lt;h2&gt;Test cases and code coverage&lt;/h2&gt;
+&lt;p&gt;With distributed packages, there are a few options for testing. We cannot rely on test-discovery, as we want my tests to be deployable.&lt;/p&gt;
+&lt;p&gt;We can exploit the __init__.py again to bring all test classes directly into the namespace of the test package.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="kn"&gt;from&lt;/span&gt; &lt;span class="nn"&gt;.tests_bettermathlib&lt;/span&gt; &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="n"&gt;BetterMathTestCases&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Now unittests can be run via the unittest module. We can choose to run both the test packages together or seperately.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;python -m unittest randomwebapp_tests bettermathlib_tests
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;For Flask we can use a flask command-line-interface property to explicitly define all the test packages that verify this application.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="n"&gt;app&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;create_app&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;os&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;getenv&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="s1"&gt;&amp;#39;FLASK_CONFIG&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="ow"&gt;or&lt;/span&gt; &lt;span class="s1"&gt;&amp;#39;default&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+
+&lt;span class="nd"&gt;@app.cli.command&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+&lt;span class="k"&gt;def&lt;/span&gt; &lt;span class="nf"&gt;test&lt;/span&gt;&lt;span class="p"&gt;():&lt;/span&gt;
+    &lt;span class="sd"&gt;&amp;quot;&amp;quot;&amp;quot;Run the unit tests.&amp;quot;&amp;quot;&amp;quot;&lt;/span&gt;
+    &lt;span class="kn"&gt;import&lt;/span&gt; &lt;span class="nn"&gt;unittest&lt;/span&gt;
+    &lt;span class="n"&gt;testmodules&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;[&lt;/span&gt;
+        &lt;span class="s1"&gt;&amp;#39;bettermathlib_tests&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+        &lt;span class="s1"&gt;&amp;#39;randomwebapp_tests&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+    &lt;span class="p"&gt;]&lt;/span&gt;
+    &lt;span class="n"&gt;suite&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;unittest&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;TestSuite&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt;
+    &lt;span class="k"&gt;for&lt;/span&gt; &lt;span class="n"&gt;t&lt;/span&gt; &lt;span class="ow"&gt;in&lt;/span&gt; &lt;span class="n"&gt;testmodules&lt;/span&gt;&lt;span class="p"&gt;:&lt;/span&gt;
+        &lt;span class="n"&gt;suite&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;addTest&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;unittest&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;defaultTestLoader&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;loadTestsFromName&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;t&lt;/span&gt;&lt;span class="p"&gt;))&lt;/span&gt;
+    &lt;span class="n"&gt;unittest&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;TextTestRunner&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;verbosity&lt;/span&gt;&lt;span class="o"&gt;=&lt;/span&gt;&lt;span class="mi"&gt;2&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;&lt;span class="o"&gt;.&lt;/span&gt;&lt;span class="n"&gt;run&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;suite&lt;/span&gt;&lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Now flask tests starts working for me -&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="o"&gt;(&lt;/span&gt;venv&lt;span class="o"&gt;)&lt;/span&gt; ...&amp;gt;flask &lt;span class="nb"&gt;test&lt;/span&gt;
+test_better_random &lt;span class="o"&gt;(&lt;/span&gt;bettermathlib_tests.tests_bettermathlib.BetterMathTestCases&lt;span class="o"&gt;)&lt;/span&gt; ... ok
+test_app_exists &lt;span class="o"&gt;(&lt;/span&gt;randomwebapp_tests.tests_basic.BasicsTestCase&lt;span class="o"&gt;)&lt;/span&gt; ... ok
+test_app_is_testing &lt;span class="o"&gt;(&lt;/span&gt;randomwebapp_tests.tests_basic.BasicsTestCase&lt;span class="o"&gt;)&lt;/span&gt; ... ok
+test_home_page &lt;span class="o"&gt;(&lt;/span&gt;randomwebapp_tests.tests_client.FlaskClientTestCase&lt;span class="o"&gt;)&lt;/span&gt; ... ok
+
+----------------------------------------------------------------------
+Ran &lt;span class="m"&gt;4&lt;/span&gt; tests in &lt;span class="m"&gt;0&lt;/span&gt;.036s
+
+OK
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;and code coverage&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;coverage run -m flask &lt;span class="nb"&gt;test&lt;/span&gt;
+coverage report
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;h2&gt;DockerFiles&lt;/h2&gt;
+&lt;p&gt;There are two DockerFiles one for production and one for unit-testing.
+The production docker files installs the packages non-editable.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;RUN python3 -m pip install -r requirements.txt
+RUN python3 -m pip install  --no-deps bettermath-lib/
+RUN python3 -m pip install  --no-deps randomweb-app/
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;The unittest takes the production docker image and uninstalls the two packages and re-installs them editable.
+This allows us to retrieve code-coverage results from a container execution.&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;RUN python3 -m pip uninstall -y bettermath-lib
+RUN python3 -m pip uninstall -y randomweb-app
+RUN python3 -m pip install  coverage
+RUN python3 -m pip install  --no-deps -e bettermath-lib/
+RUN python3 -m pip install  --no-deps -e randomweb-app/
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;Thank you. The complete sample project is &lt;a href="https://github.com/cmlzaGk/sampleflask"&gt;here&lt;/a&gt;.&lt;/p&gt;</content><category term="python"></category><category term="flask"></category><category term="docker"></category></entry></feed>
