@@ -30,7 +30,7 @@ SOCIAL = (('twitter', 'http://twitter.com/rishimaker'),
 
 DEFAULT_PAGINATION = 10
 
-THEME = r'..\pelican-themes\bootstrap2'
+THEME = r'../../blog/themes/bootstrap2'
 
 # Uncomment following line if you want document-relative URLs when developing
 #RELATIVE_URLS = True
