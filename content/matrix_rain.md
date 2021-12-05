@@ -1,13 +1,13 @@
-Title: Creating Matrix Rain On Good Old Terminals
+Title: Scripting Matrix Rain On Good Old Terminals
 Date: 2021-12-04 05:47
 Modified: 2020-03-21 05:47
 Category: Python
 Slug: matrix-rain
-Tags: python, grammar
+Tags: python, curses, windows
 Authors: Rishi Maker
 Summary: Matrix Rain
 
-Matrix 4 is releasing this month. Matrix is one of the most influential movies of all time.
+Matrix 4 release date is set for Dec 22. Matrix is one of the most influential movies of all time.
 
 A feature of the movie was the Matrix Rain.
 
@@ -15,10 +15,14 @@ I went retro this week and scripted the Matrix Rain console application.
 
 In this blog I will go over how to create matrix rain on a terminal. 
 
-The command line output of the program can be viewed on [Youtube](https://www.youtube.com/watch?v=uJwc8n0OnQE)
 
+## Links
 
-## Summary
+The GIT [repository](https://github.com/cmlzaGk/mtrixrain/) of the scripts. 
+
+A [Youtube](https://www.youtube.com/watch?v=uJwc8n0OnQE) of the matrix rain built using on Windows cmd prompt using the approach described here.
+
+## Contents
 
 
 - What is Matrix Rain?
@@ -29,8 +33,6 @@ The command line output of the program can be viewed on [Youtube](https://www.yo
 - The Curses Library
 - Conclusion
 
-For reference the entire project can be found [here](https://github.com/cmlzaGk/mtrixrain/)
-
 ## What is Matrix Rain?
 
 [Matrix Rain](https://en.wikipedia.org/wiki/Matrix_digital_rain) is a visualization of characters falling downwards on a console in the form of rain. 
@@ -38,7 +40,7 @@ For reference the entire project can be found [here](https://github.com/cmlzaGk/
 
 ## Approach
 
-The overall approach is naive 
+The approach is simple 
 
 * Prepare a buffer
 * Repeat forever
@@ -52,9 +54,9 @@ This works for most part, except for some challenges that I will take about, as 
 
 ## Character Set
 
-The Unicode characters and font-family to choose in a terminal-based matrix rain is very important. Two conditions need to be met. 
+The choice of Unicode characters and font-family for a terminal-based matrix rain is very important. Three conditions need to be met. 
 
-All characters should be printable on the terminal, and the font-family should be Mono-spaced.
+The font-family should be Mono-spaced, all characters should be printable on the terminal, and the terminal should be able to render the characters fast.
 
 Mono-spaced means that the letters occupy same amount of horizontal space. 
 
@@ -101,9 +103,16 @@ ALPHABETS = [
 
 ```
 
+The above will also test whether a character takes a long time to render on the screen.
+
+Unicode contains a lot of rich characters and if your range picks up such a character that takes time to render, you will not get the rain effect.
+
+"Consolas" and the range I published should do the trick for Windows Command prompt.
+
+
 ## Flickering Rain
 
-I am trying to build Matrix Rain using standard library. With that restriction in place, the interesting part is how to clear the terminal.
+The first goal was to script using dependencies from just the standard python library. With that restriction in place, the interesting part was how to clear the terminal.
 
 The first approach is to invoke a shell call, and call 'cls' on windows, and that is not a bad start.
 
@@ -111,7 +120,7 @@ The first approach is to invoke a shell call, and call 'cls' on windows, and tha
 
 As can be seen, we have achieved a rain effect, but this level of flickering is unacceptable.
 
-This flickering occurs, because of the time it takes to do an inter-process call, clear and then display our content from another process.
+This flicker occurs because of the time it takes to do an inter-process call, clear and then display our content from another process.
 
 We have to do better.
 
@@ -142,19 +151,21 @@ VT100 controls also allows us to enter color codes, which completes the renderin
 
 ## The Curses Library
 
-While we have just seen how to build Matrix Rain on console using standard library, we have however restricted our target consoles to VT100 consoles. 
+The limitations of scripting using only the standard library can be summarized as below:
 
-Besides, there is no standard way to get a terminal's width and height. In the above application, I pass the width and height of the console layout as a parameter. 
+* There is no standard method of determining the width and height of the terminal.
+* Terminal specific codes (e.g. VT100) need to be embedded to avoid flickering.
+* The buffer that gets printed on the screen needs to be organized manually.
 
-This is not ideal. 
+It would be good if there was a library that provided a consistent interface and hid the porting implementation from the developer.
 
-All these problems are solved by using a portable library like 'Curses'. Curses is not shipped with the standard Python distribution on Windows. 
+The Curses library does exactly that. Curses is not shipped with the standard Python distribution on Windows. 
 
-However, there are third party Curses library that can be installed using pip. 
+However, there are third party Windows Curses libraries that can be installed using pip. 
 
-The overall approach does not change with Curses, except the library for rendering. 
+The overall approach does not change with Curses, except rendering. 
 
-While using Curses, I did something different - I decided to do async rendering and have veritical channels get drained asynchronously too. 
+With Curses, I did something different - I decided to do async rendering and have vertical channels get drained asynchronously too. 
 
 The output of the Curses implementation is on [Youtube](https://www.youtube.com/watch?v=uJwc8n0OnQE)
 
@@ -162,6 +173,8 @@ The output of the Curses implementation is on [Youtube](https://www.youtube.com/
 
 Console programming still has applications particularly in non-graphical systems that still exist.
 
-Matrix Rain is a fun problem to learn the techniques. It is simple enough to solve and can have satisfying results. 
+Naturally, there are differences in considerations, restrictions and limitations from what developing even in Simple GUI systems.
+
+Matrix Rain on terminal is a fun problem to learn the techniques. It is simple enough to solve and can have satisfying results. 
 
 See you at the theatres. 

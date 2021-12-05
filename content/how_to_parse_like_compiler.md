@@ -1,6 +1,6 @@
 Title: How To Parse Like A Compiler - Part I
-Date: 2020-03-21 05:47
-Modified: 2020-03-21 05:47
+Date: 2021-03-02 05:47
+Modified: 2021-03-02 05:47
 Category: Python
 Slug: python-parse-compiler-part1
 Tags: python, lark, grammar
