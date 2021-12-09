@@ -1,6 +1,6 @@
 Title: Scripting Matrix Rain On Good Old Terminals
 Date: 2021-12-04 05:47
-Modified: 2020-03-21 05:47
+Modified: 2021-12-04 05:47
 Category: Python
 Slug: matrix-rain
 Tags: python, curses, windows
