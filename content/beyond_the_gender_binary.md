@@ -1,11 +1,10 @@
 Title: Book Review - Beyond The Gender Binary
-Date: 2021-12-08 19:07
-Modified: 2021-12-08 19:07
+Date: 2021-12-10 20:44
+Modified: 2021-12-10 20:44
 Category: bookreview
 Slug: beyond-the-gender-binary
 Tags: bookreview, dni
 Authors: Rishi Maker
-Status: draft
 Summary: Book review of Beyond The Gender Binary
 
 “Beyond the gender binary” is a pocketbook by Alok Vaid-Menon. 
