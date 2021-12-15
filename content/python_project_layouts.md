@@ -5,7 +5,7 @@ Category: Python
 Tags: python, flask, docker
 Slug: python-project-layout
 Authors: Rishi Maker
-Summary: Python Project Laoyouts.  
+Summary: Python Project Layouts.  
 
 I will walk through a sample web application built using python, flask and docker.
 The application invokes a specialized math function in a library co-developed during application development.  
