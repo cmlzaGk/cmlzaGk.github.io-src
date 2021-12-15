@@ -86,8 +86,8 @@ With match pattern, a handler for json data becomes very simple.
 
 ```python
 
-def process_media_blob(data):
-    match data:
+def process_media_blob(jsondata):
+    match jsondata:
         case {'type':'audio', 'format' :'mp3', 'data': data}:
             render_mp3(data)
 
